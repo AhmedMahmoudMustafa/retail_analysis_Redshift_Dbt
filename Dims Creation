@@ -1,0 +1,51 @@
+CREATE SCHEMA retail;
+
+
+-- Customer Dimension
+CREATE TABLE retail.dim_customers (
+   customer_id INT PRIMARY KEY,
+   customer_name VARCHAR(100),
+   email VARCHAR(100),
+   region VARCHAR(50),
+   signup_date DATE
+);
+
+
+-- Product Dimension
+CREATE TABLE retail.dim_products (
+   product_id INT PRIMARY KEY,
+   product_name VARCHAR(100),
+   category VARCHAR(50),
+   price DECIMAL(10,2)
+);
+
+
+-- Store Dimension
+CREATE TABLE retail.dim_stores (
+   store_id INT PRIMARY KEY,
+   store_name VARCHAR(100),
+   location VARCHAR(100),
+   manager_name VARCHAR(100)
+);
+
+
+-- Time Dimension
+CREATE TABLE retail.dim_time (
+   date_id DATE PRIMARY KEY,
+   year INT,
+   quarter INT,
+   month INT,
+   day INT,
+   day_of_week VARCHAR(20)
+);
+
+
+-- Employee Dimension
+CREATE TABLE retail.dim_employees (
+   employee_id INT PRIMARY KEY,
+   employee_name TEXT,
+   department TEXT,
+   employment_type TEXT,
+   hire_date DATE,
+   store_id INT  
+);
