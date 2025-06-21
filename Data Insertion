@@ -1,0 +1,181 @@
+INSERT INTO retail.dim_customers (customer_id, customer_name, email, region, signup_date)
+WITH numbers AS (
+  SELECT ROW_NUMBER() OVER() AS id
+  FROM (
+    SELECT 1 FROM 
+      (SELECT 1 FROM retail.dim_time LIMIT 100) t1, -- Any table with >100 rows
+      (SELECT 1 FROM retail.dim_products LIMIT 100) t2
+  ) AS gen_rows
+  LIMIT 100000
+)
+SELECT
+  id AS customer_id,
+  'Customer_' || id AS customer_name,
+  'customer' || id || '@example.com' AS email,
+  CASE
+      WHEN id % 4 = 0 THEN 'North'
+      WHEN id % 4 = 1 THEN 'South'
+      WHEN id % 4 = 2 THEN 'East'
+      ELSE 'West'
+  END AS region,
+  DATEADD(day, CAST(-FLOOR(RANDOM() * 3650) AS INT), CURRENT_DATE) AS signup_date
+FROM numbers;
+
+
+
+
+############################################################################
+
+INSERT INTO retail.dim_products (product_id, product_name, category, price)
+SELECT *
+FROM (
+  WITH numbers AS (
+    SELECT ROW_NUMBER() OVER () AS n
+    FROM 
+      (SELECT 1 FROM 
+        (SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL 
+         UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL) t1, -- 10 rows
+        (SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL 
+         UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL) t2  -- 10 rows
+      ) cross_10x10  -- 10 x 10 = 100 rows
+    LIMIT 500
+  )
+  SELECT
+    n AS product_id,
+    'Product_' || n AS product_name,
+    CASE
+      WHEN n % 3 = 0 THEN 'Electronics'
+      WHEN n % 3 = 1 THEN 'Clothing'
+      ELSE 'Home & Kitchen'
+    END AS category,
+    ROUND(RANDOM() * 500 + 5, 2) AS price
+  FROM numbers
+) AS fake_products;
+
+
+
+###########################################################
+
+INSERT INTO retail.dim_stores (store_id, store_name, location, manager_name)
+WITH gen_rows AS (
+  SELECT ROW_NUMBER() OVER() AS rn
+  FROM (
+    SELECT 1 FROM 
+      (SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL
+       UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL) a,  -- 10 rows
+      (SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL
+       UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL) b   -- 10 rows
+  ) AS base
+  LIMIT 100
+)
+SELECT
+   rn AS store_id,
+   'Store_' || rn AS store_name,
+   CASE
+       WHEN rn % 4 = 0 THEN 'New York'
+       WHEN rn % 4 = 1 THEN 'Los Angeles'
+       WHEN rn % 4 = 2 THEN 'Chicago'
+       ELSE 'Houston'
+   END AS location,
+   'manager_name_' || rn AS manager_name
+FROM gen_rows;
+
+
+############################################################
+drop table retail.fact_sales
+INSERT INTO retail.fact_sales (
+    sale_id,
+    customer_id,
+    product_id,
+    store_id,
+    sale_date,
+    quantity_sold,
+    total_amount
+)
+WITH RECURSIVE numbers(n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM numbers WHERE n < 1000000
+)
+SELECT
+   n AS sale_id,
+   FLOOR(RANDOM() * 100000) + 1 AS customer_id,
+   FLOOR(RANDOM() * 500) + 1 AS product_id,
+   FLOOR(RANDOM() * 100) + 1 AS store_id,
+   DATEADD(day, CAST(-FLOOR(RANDOM() * 1825) AS INT), CURRENT_DATE) AS sale_date,
+   FLOOR(RANDOM() * 100) + 1 AS quantity_sold,
+   ROUND((FLOOR(RANDOM() * 100) + 1) * (FLOOR(RANDOM() * 100) + 5), 2) AS total_amount
+FROM numbers;
+
+
+
+
+
+
+
+#############################################################
+INSERT INTO retail.fact_inventory
+SELECT
+   ROW_NUMBER() OVER() AS id,
+   FLOOR(RANDOM() * 500) + 1 AS product_id,
+   FLOOR(RANDOM() * 100) + 1 AS store_id,
+   DATEADD(day, CAST(-FLOOR(RANDOM() * 1825) AS INT), CURRENT_DATE) AS stock_date,
+   FLOOR(RANDOM() * 100) + 1 AS stock_level
+FROM STV_BLOCKLIST
+LIMIT 500000;
+
+
+################################################################
+CREATE TEMP TABLE temp_date_series AS
+WITH RECURSIVE dates(n, date_id) AS (
+    SELECT 0::INT, CURRENT_DATE::DATE
+    UNION ALL
+    SELECT n + 1, (date_id - INTERVAL '1 day')::DATE
+    FROM dates
+    WHERE n + 1 < 5000
+)
+SELECT date_id FROM dates;
+
+
+-- Step 2: Insert into retail.dim_time
+INSERT INTO retail.dim_time (date_id, year, quarter, month, day, day_of_week)
+SELECT
+   date_id,
+   EXTRACT(YEAR FROM date_id) AS year,
+   EXTRACT(QUARTER FROM date_id) AS quarter,
+   EXTRACT(MONTH FROM date_id) AS month,
+   EXTRACT(DAY FROM date_id) AS day,
+   TRIM(TO_CHAR(date_id, 'Day')) AS day_of_week
+FROM temp_date_series;
+
+
+#########################################################################
+
+INSERT INTO retail.dim_employees (
+    employee_id,
+    employee_name,
+    department,
+    employment_type,
+    hire_date,
+    store_id
+)
+WITH RECURSIVE numbers(n) AS (
+    SELECT 1
+    UNION ALL
+    SELECT n + 1 FROM numbers WHERE n < 10000
+)
+SELECT
+   n AS employee_id,
+   'Employee_' || n AS employee_name,
+   CASE
+       WHEN n % 3 = 0 THEN 'HR'
+       WHEN n % 3 = 1 THEN 'Sales'
+       ELSE 'Operations'
+   END AS department,
+   CASE
+       WHEN n % 2 = 0 THEN 'Full-time'
+       ELSE 'Part-time'
+   END AS employment_type,
+   DATEADD(day, -FLOOR(RANDOM() * 3650)::INT, CURRENT_DATE) AS hire_date,
+   (n % 5) + 1 AS store_id
+FROM numbers;
